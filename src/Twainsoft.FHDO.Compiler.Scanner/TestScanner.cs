@@ -1,4 +1,7 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics.Eventing.Reader;
+using System.Resources;
 
 namespace Twainsoft.FHDO.Compiler.Scanner
 {
@@ -23,17 +26,18 @@ namespace Twainsoft.FHDO.Compiler.Scanner
         private char[] buffer;
 
         // Positionen in Puffer
-        private int pos = 0;
-        private int start_pos = 0;
+        private int pos = 0;            // Das nächste zu lesende Zeichen
+        private int start_pos = 0;      // Einstieg für das Zustandsdiagramm.
 
         // Zustaende
         private int state;
         private int start_state;
         
 
-        public TestScanner(string strBuffer)
+        public TestScanner(string input)
         {
-            // ...
+            input = input + "*";
+            buffer = input.ToCharArray();
         }
 
         /// <summary>
@@ -42,56 +46,142 @@ namespace Twainsoft.FHDO.Compiler.Scanner
         /// <returns></returns>
         private char NextChar()
         {
-            // ...
-            return ' ';
+            return buffer[pos++];
         }
 
         private void StepBack()
         {
-            // ...
+            pos--;
         }
 
         private bool IsDigit(char c)
         {
-            // ...
-            return false;
+            return Char.IsDigit(c);
         }
 
         private bool IsDelim(char c)
         {
-            // ...
-            return false;
+            return c == '\t' || c == '\n' || c == ' ';
         }
 
         private bool IsSign(char c)
         {
-            // ...
-            return false;
+            return c == '+' || c == '-';
         }
 
         private int NextDiagram()
         {
-            // ...
-            return 0;
+            pos = start_pos; // Deswegen merken wir uns die Start-Post, um im Fehlerfall daraufhin als Start zurückspringen zu können!
+
+            switch (start_state)
+            {
+                case 0: start_state = 2;
+                    break;
+                case 2: start_state = 4;
+                    break;
+                //case 6: start_state = 7;
+                //    break;
+                case 4: start_state = 7;
+                    break;
+            }
+
+            return start_state;
         }
 
         // Gibt die Position des als nächstes zu lesenden Zeichens zurück
         public int GetPos()
         {
-            // ...
-            return 0;
+            return pos;
         }
 
         private int GetToken()
         {
-            // ...
-            return 0;
+            char c;
+            state = 0;
+            start_state = 0;
+            while (true)
+            {
+                switch (state)
+                {
+                    // Token OPEN
+                    case 0:
+                        c = NextChar();
+                        if (c == '(')
+                        {
+                            state = 1;
+                        }
+                        else
+                        {
+                            state = NextDiagram();
+                        }
+                        break;
+                    case 1:
+                        start_pos = pos;
+                        return OPEN;
+                    // Token CLOSE
+                    case 2:
+                        c = NextChar();
+                        if (c == ')')
+                        {
+                            state = 3;
+                        }
+                        else
+                        {
+                            state = NextDiagram();
+                        }
+                        break;
+                    case 3:
+                        start_pos = pos;
+                        return (CLOSE);
+                    case 4:
+                        c = NextChar();
+                        if (IsDelim(c))
+                        {
+                            state = 5;
+                        }
+                        else
+                        {
+                            state = NextDiagram();
+                        }
+                        break;
+                    case 5:
+                        c = NextChar();
+
+                        if (!IsDelim(c))
+                        {
+                            state = 6;
+                        }
+                        break;
+                    case 6:
+                        StepBack();
+                        state = 0;
+                        start_state = 0;
+                        start_pos = pos;
+                        break;
+                    default:
+                        return ERROR;
+                }
+            }
         }
 
         public List<int> GetTokenList()
         {
-            // ...
-            return new List<int>();
+            var tokenList = new List<int>();
+            var token = 0;
+
+            while (pos < buffer.Length)
+            {
+                token = GetToken();
+
+                if (token == ERROR_STATE)
+                {
+                    return new List<int>();
+                }
+
+                tokenList.Add(token);
+            }
+
+            return tokenList;
         }
     }
 }
